@@ -10,33 +10,54 @@
     body { font-family: system-ui, sans-serif; }
     .card { transition: all 0.3s; }
     .card:hover { transform: translateY(-6px); }
+    .modal { animation: fadeIn 0.3s; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   </style>
 </head>
 <body class="bg-gray-950 text-white min-h-screen">
 
-<div class="max-w-5xl mx-auto px-4 py-10">
+<div class="max-w-6xl mx-auto px-4 py-10">
   <div class="text-center mb-10">
     <h1 class="text-5xl font-bold text-amber-400 mb-3">Rack Wait Predictor</h1>
-    <p class="text-xl text-gray-400">Real-time fuel terminal wait times • Built by & for Tanker Drivers</p>
+    <p class="text-xl text-gray-400">Real-time fuel terminal wait times • Built for Tanker Drivers</p>
   </div>
 
-  <!-- Search -->
-  <div class="mb-10">
-    <input type="text" id="searchInput" 
-           placeholder="Search terminals (Benicia, Valero, Carson, Martinez...)" 
-           class="w-full bg-gray-900 border border-gray-700 rounded-3xl px-8 py-5 text-lg focus:outline-none focus:border-amber-500">
+  <!-- Search & Filter -->
+  <div class="flex flex-col md:flex-row gap-4 mb-10">
+    <input type="text" id="searchInput" placeholder="Search terminals or cities..." 
+           class="flex-1 bg-gray-900 border border-gray-700 rounded-3xl px-8 py-5 text-lg focus:outline-none focus:border-amber-500">
+    <select id="stateFilter" class="bg-gray-900 border border-gray-700 rounded-3xl px-6 py-5 text-lg">
+      <option value="">All States</option>
+      <option value="CA">California</option>
+      <option value="TX">Texas</option>
+    </select>
   </div>
 
-  <!-- Check-In Button -->
-  <div class="flex justify-center mb-10">
-    <button onclick="showCheckInForm()" 
-            class="bg-amber-500 hover:bg-amber-600 text-black font-bold text-xl px-10 py-4 rounded-3xl flex items-center gap-3">
-      <i class="fas fa-clock"></i> I'M AT A RACK - CHECK IN
+  <!-- Big Check-In Button -->
+  <div class="flex justify-center mb-12">
+    <button onclick="showCheckInModal()" 
+            class="bg-amber-500 hover:bg-amber-600 text-black font-bold text-2xl px-12 py-6 rounded-3xl flex items-center gap-4 shadow-lg">
+      <i class="fas fa-clock text-3xl"></i>
+      I'M AT A RACK - CHECK IN NOW
     </button>
   </div>
 
-  <div id="results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-    <!-- Cards will load here -->
+  <div id="results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+</div>
+
+<!-- Check-In Modal -->
+<div id="checkInModal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+  <div class="bg-gray-900 rounded-3xl p-8 max-w-md w-full mx-4 modal">
+    <h2 class="text-2xl font-bold mb-6">Check In at Terminal</h2>
+    <select id="terminalSelect" class="w-full bg-gray-800 border border-gray-700 rounded-2xl px-6 py-4 mb-4 text-lg">
+      <!-- Populated by JS -->
+    </select>
+    <button onclick="submitCheckIn()" 
+            class="w-full bg-green-600 hover:bg-green-500 py-4 rounded-2xl font-bold text-xl">
+      ✅ I'm Here - Start Waiting
+    </button>
+    <button onclick="hideCheckInModal()" 
+            class="w-full mt-3 text-gray-400 py-3">Cancel</button>
   </div>
 </div>
 
@@ -44,50 +65,70 @@
   const SUPABASE_URL = 'https://ciljonavusljhvkrdyxo.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_E0HIlMVQuYRB1ZBHP4t3NA_5xyFI6AK';
 
+  // Seed Terminals (expand this anytime)
+  let terminals = [
+    {id: "benicia-valero", name: "Valero Benicia", city: "Benicia", state: "CA"},
+    {id: "martinez-shell", name: "Shell Martinez", city: "Martinez", state: "CA"},
+    {id: "richmond-chevron", name: "Chevron Richmond", city: "Richmond", state: "CA"},
+    {id: "carson-marathon", name: "Marathon Carson", city: "Carson", state: "CA"},
+    {id: "stockton-valero", name: "Valero Stockton", city: "Stockton", state: "CA"},
+    {id: "bakersfield", name: "Kern Oil Bakersfield", city: "Bakersfield", state: "CA"},
+    // Add more as needed
+  ];
+
   async function loadReports() {
-    try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/rack_reports?select=*&order=arrived_at.desc&limit=30`, {
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-        }
-      });
-      const data = await res.json();
-      renderCards(data);
-    } catch (e) {
-      console.error(e);
-    }
+    // For now using seed data - later we'll pull real reports
+    renderCards(terminals);
   }
 
-  function renderCards(reports) {
+  function renderCards(data) {
     const container = document.getElementById('results');
-    if (reports.length === 0) {
-      container.innerHTML = `<p class="col-span-full text-center text-gray-400 py-20">No recent reports yet.<br>Be the first driver to check in!</p>`;
-      return;
-    }
-
-    container.innerHTML = reports.map(r => `
+    container.innerHTML = data.map(t => `
       <div class="card bg-gray-900 border border-gray-700 rounded-3xl p-6">
-        <h3 class="font-bold text-xl">${r.terminal_name}</h3>
-        <p class="text-gray-400">${r.city}, ${r.state}</p>
-        <div class="mt-6 flex justify-between items-end">
-          <div>
-            <span class="text-4xl font-mono text-amber-400">${r.wait_minutes || '—'}</span>
-            <span class="text-sm text-gray-400 block">min wait</span>
-          </div>
-          <button onclick="alert('Check-in feature coming soon!')" 
-                  class="bg-gray-800 hover:bg-gray-700 px-5 py-2 rounded-2xl text-sm">
-            Check In
-          </button>
-        </div>
+        <h3 class="font-bold text-xl">${t.name}</h3>
+        <p class="text-gray-400">${t.city}, ${t.state}</p>
+        <div class="mt-6 text-amber-400 text-5xl font-mono">—</div>
+        <p class="text-sm text-gray-500">No recent reports</p>
+        <button onclick="quickCheckIn('${t.id}', '${t.name}')" 
+                class="mt-6 w-full bg-gray-800 hover:bg-amber-600 hover:text-black py-3 rounded-2xl text-sm font-medium">
+          Check In Here
+        </button>
       </div>
     `).join('');
   }
 
-  // Search functionality
+  function showCheckInModal() {
+    const select = document.getElementById('terminalSelect');
+    select.innerHTML = terminals.map(t => 
+      `<option value="${t.id}">${t.name} (${t.city})</option>`
+    ).join('');
+    document.getElementById('checkInModal').classList.remove('hidden');
+  }
+
+  function hideCheckInModal() {
+    document.getElementById('checkInModal').classList.add('hidden');
+  }
+
+  async function submitCheckIn() {
+    const terminalId = document.getElementById('terminalSelect').value;
+    const terminal = terminals.find(t => t.id === terminalId);
+    
+    alert(`✅ Checked in at ${terminal.name}!\n\nWait time tracking started. (Feature expanding soon)`);
+    hideCheckInModal();
+    // In future versions this will save to Supabase
+  }
+
+  function quickCheckIn(id, name) {
+    alert(`✅ Quick check-in at ${name}\n\nThis will be fully functional soon!`);
+  }
+
+  // Search
   document.getElementById('searchInput').addEventListener('input', (e) => {
-    // Simple client-side search (we'll improve later)
-    console.log("Searching for:", e.target.value);
+    const term = e.target.value.toLowerCase();
+    const filtered = terminals.filter(t => 
+      t.name.toLowerCase().includes(term) || t.city.toLowerCase().includes(term)
+    );
+    renderCards(filtered);
   });
 
   // Initial load
