@@ -76,13 +76,10 @@
 
   async function loadData() {
     try {
-      const [tRes] = await Promise.all([
-        fetch(`${SUPABASE_URL}/rest/v1/terminals?select=*`, {
-          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-        })
-      ]);
-      terminals = await tRes.json();
-
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/terminals?select=*`, {
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+      terminals = await res.json();
       initMap();
       renderCards(terminals);
     } catch (e) {
@@ -117,7 +114,7 @@
     const terminalId = document.getElementById('terminalSelect').value;
     const estWait = parseInt(document.getElementById('estWait').value) || 25;
     const terminal = terminals.find(t => t.id === terminalId);
-    if (!terminal) return;
+    if (!terminal) return alert("Please select a terminal");
 
     try {
       await fetch(`${SUPABASE_URL}/rest/v1/rack_reports`, {
@@ -133,14 +130,17 @@
           city: terminal.city,
           state: terminal.state,
           arrived_at: new Date().toISOString(),
-          est_wait_minutes: estWait,
-          status: 'waiting'
+          est_wait_minutes: estWait
         })
       });
-      alert(`✅ Check-in recorded at ${terminal.name}!`);
+
+      // Success feedback + close modal
+      alert(`✅ Thank you!\nCheck-in recorded at ${terminal.name}.`);
       hideCheckInModal();
+      
     } catch (e) {
-      alert("Error saving check-in.");
+      alert("❌ Failed to save. Please try again.");
+      console.error(e);
     }
   }
 
@@ -150,16 +150,10 @@
       <div class="card bg-gray-900 border border-gray-700 rounded-3xl p-6">
         <h3 class="font-bold text-xl">${t.name}</h3>
         <p class="text-gray-400">${t.city}, ${t.state}</p>
-        <div class="mt-6 flex gap-3">
-          <button onclick="quickCheckIn('${t.id}', '${t.name}')" 
-                  class="flex-1 bg-amber-600 hover:bg-amber-500 py-4 rounded-2xl text-sm font-medium">
-            Check In
-          </button>
-          <button onclick="markAsLoaded('${t.id}', '${t.name}')" 
-                  class="flex-1 bg-green-700 hover:bg-green-600 py-4 rounded-2xl text-sm font-medium">
-            Mark as Loaded
-          </button>
-        </div>
+        <button onclick="quickCheckIn('${t.id}', '${t.name}')" 
+                class="mt-6 w-full bg-amber-600 hover:bg-amber-500 py-4 rounded-2xl text-sm font-medium">
+          Check In Here
+        </button>
       </div>
     `).join('');
   }
@@ -167,13 +161,6 @@
   function quickCheckIn(id, name) {
     document.getElementById('terminalSelect').value = id;
     showCheckInModal();
-  }
-
-  function markAsLoaded(id, name) {
-    if (confirm(`Mark ${name} as Loaded?`)) {
-      alert(`✅ Marked as Loaded at ${name}!\n\nReal wait time has been recorded. Thank you!`);
-      // Future: Update the latest report for this terminal with loaded_at
-    }
   }
 
   // Search & Filter
