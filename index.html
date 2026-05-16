@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rack Wait Predictor • Safety Ninja</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    body { font-family: system-ui, sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-950 text-white min-h-screen">
+
+<div class="max-w-4xl mx-auto px-4 py-8">
+  <h1 class="text-4xl font-bold text-center mb-2 text-amber-400">Rack Wait Predictor</h1>
+  <p class="text-center text-gray-400 mb-10">Real-time fuel terminal wait times • Built for Tanker Drivers</p>
+
+  <div class="mb-8">
+    <input type="text" id="searchInput" 
+           placeholder="Search terminals (Benicia, Valero, Carson, etc...)" 
+           class="w-full bg-gray-900 border border-gray-700 rounded-2xl px-6 py-4 text-lg focus:outline-none focus:border-amber-500">
+  </div>
+
+  <div id="results" class="space-y-4">
+    <!-- Results will appear here -->
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://ciljonavusljhvkrdyxo.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_E0HIlMVQuYRB1ZBHP4t3NA_5xyFI6AK';
+
+  async function loadRecentReports() {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/rack_reports?select=*&order=arrived_at.desc&limit=10`, {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      const data = await response.json();
+      console.log("Recent reports:", data);
+      // We'll build nice cards next
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  loadRecentReports();
+</script>
+
+</body>
+</html>
