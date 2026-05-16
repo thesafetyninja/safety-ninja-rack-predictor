@@ -21,10 +21,20 @@
 <div class="max-w-7xl mx-auto px-4 py-10">
   <div class="text-center mb-12">
     <h1 class="text-5xl font-bold text-amber-400 mb-3">Rack Wait Predictor</h1>
-    <p class="text-xl text-gray-400">Loading terminals from database...</p>
+    <p class="text-xl text-gray-400">Nationwide • Crowdsourced • Real-time</p>
   </div>
 
-  <div id="status" class="text-center text-amber-400 mb-8"></div>
+  <div class="flex flex-col md:flex-row gap-4 mb-10">
+    <input type="text" id="searchInput" placeholder="Search terminals or cities..." 
+           class="flex-1 bg-gray-900 border border-gray-700 rounded-3xl px-8 py-5 text-lg focus:outline-none focus:border-amber-500">
+    <select id="stateFilter" class="bg-gray-900 border border-gray-700 rounded-3xl px-6 py-5 text-lg">
+      <option value="">All States</option>
+      <option value="CA">California</option>
+      <option value="TX">Texas</option>
+      <option value="AZ">Arizona</option>
+      <option value="NV">Nevada</option>
+    </select>
+  </div>
 
   <div class="flex justify-center mb-12">
     <button onclick="showCheckInModal()" 
@@ -64,59 +74,31 @@
   const SUPABASE_ANON_KEY = 'sb_publishable_E0HIlMVQuYRB1ZBHP4t3NA_5xyFI6AK';
 
   let terminals = [];
+  let map;
 
   async function loadTerminals() {
-    const status = document.getElementById('status');
-    status.textContent = "Connecting to database...";
-
     try {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/terminals?select=*`, {
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-        }
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
       });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
       terminals = await res.json();
-      console.log("Loaded terminals:", terminals.length);
-
-      status.textContent = `✅ Loaded ${terminals.length} terminals`;
-      
       initMap();
       renderCards(terminals);
     } catch (e) {
       console.error(e);
-      status.innerHTML = `❌ Failed to load from database.<br><small>${e.message}</small>`;
-      // Fallback list
-      terminals = [{id:"test", name:"Test Terminal (Fallback)", city:"Test City", state:"CA"}];
-      renderCards(terminals);
     }
   }
 
   function initMap() {
-    const map = L.map('map').setView([37.8, -119.0], 6);
+    map = L.map('map').setView([37.8, -119.0], 6);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
     terminals.forEach(t => {
       if (t.lat && t.lng) {
-        L.marker([t.lat, t.lng]).addTo(map).bindPopup(`<b>${t.name}</b><br>${t.city}, ${t.state}`);
+        L.marker([t.lat, t.lng]).addTo(map)
+          .bindPopup(`<b>${t.name}</b><br>${t.city}, ${t.state}`);
       }
     });
-  }
-
-  function renderCards(data) {
-    const container = document.getElementById('results');
-    container.innerHTML = data.map(t => `
-      <div class="card bg-gray-900 border border-gray-700 rounded-3xl p-6">
-        <h3 class="font-bold text-xl">${t.name}</h3>
-        <p class="text-gray-400">${t.city}, ${t.state}</p>
-        <button onclick="quickCheckIn('${t.id}', '${t.name}')" class="mt-6 w-full bg-amber-600 hover:bg-amber-500 py-4 rounded-2xl text-sm font-medium">
-          Check In Here
-        </button>
-      </div>
-    `).join('');
   }
 
   function showCheckInModal() {
@@ -130,17 +112,74 @@
     document.getElementById('checkInModal').classList.add('hidden');
   }
 
+  async function submitCheckIn() {
+    const terminalId = document.getElementById('terminalSelect').value;
+    const estWait = parseInt(document.getElementById('estWait').value) || 25;
+    const terminal = terminals.find(t => t.id === terminalId);
+    
+    if (!terminal) return alert("Please select a terminal");
+
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/rack_reports`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          terminal_id: terminal.id,
+          terminal_name: terminal.name,
+          city: terminal.city,
+          state: terminal.state,
+          arrived_at: new Date().toISOString(),
+          est_wait_minutes: estWait
+        })
+      });
+
+      // Better confirmation message
+      alert(`✅ Thank you!\n\nCheck-in recorded at ${terminal.name}.\nYour report helps other drivers!`);
+      hideCheckInModal();
+    } catch (e) {
+      alert("❌ Failed to save check-in. Please try again.");
+      console.error(e);
+    }
+  }
+
+  function renderCards(data) {
+    const container = document.getElementById('results');
+    container.innerHTML = data.map(t => `
+      <div class="card bg-gray-900 border border-gray-700 rounded-3xl p-6">
+        <h3 class="font-bold text-xl">${t.name}</h3>
+        <p class="text-gray-400">${t.city}, ${t.state}</p>
+        <button onclick="quickCheckIn('${t.id}', '${t.name}')" 
+                class="mt-6 w-full bg-amber-600 hover:bg-amber-500 py-4 rounded-2xl text-sm font-medium">
+          Check In Here
+        </button>
+      </div>
+    `).join('');
+  }
+
   function quickCheckIn(id, name) {
     document.getElementById('terminalSelect').value = id;
     showCheckInModal();
   }
 
-  async function submitCheckIn() {
-    alert("✅ Check-in received! (Database connection is working)");
-    hideCheckInModal();
+  // Search
+  document.getElementById('searchInput').addEventListener('input', filterResults);
+  document.getElementById('stateFilter').addEventListener('change', filterResults);
+
+  function filterResults() {
+    const term = document.getElementById('searchInput').value.toLowerCase();
+    const state = document.getElementById('stateFilter').value;
+    const filtered = terminals.filter(t => 
+      (!term || t.name.toLowerCase().includes(term) || t.city.toLowerCase().includes(term)) &&
+      (!state || t.state === state)
+    );
+    renderCards(filtered);
   }
 
-  // Initialize
+  // Start the app
   loadTerminals();
 </script>
 </body>
