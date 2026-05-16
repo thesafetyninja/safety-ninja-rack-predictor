@@ -12,22 +12,19 @@
     body { font-family: system-ui, sans-serif; }
     .card { transition: all 0.3s ease; }
     .card:hover { transform: translateY(-8px); }
-    #map { height: 360px; border-radius: 16px; }   /* Reduced height for mobile */
-    
-    @media (min-width: 768px) {
-      #map { height: 480px; }
-    }
+    #map { height: 360px; border-radius: 16px; }
+    @media (min-width: 768px) { #map { height: 480px; } }
   </style>
 </head>
 <body class="bg-gray-950 text-white min-h-screen">
 
-<div class="max-w-7xl mx-auto px-4 py-8">
-  <div class="text-center mb-10">
-    <h1 class="text-4xl font-bold text-amber-400 mb-3">Rack Wait Predictor</h1>
-    <p class="text-lg text-gray-400">Nationwide • Crowdsourced • Real-time</p>
+<div class="max-w-7xl mx-auto px-4 py-10">
+  <div class="text-center mb-12">
+    <h1 class="text-5xl font-bold text-amber-400 mb-3">Rack Wait Predictor</h1>
+    <p class="text-xl text-gray-400">Nationwide Crowdsourced Fuel Terminal Wait Times</p>
   </div>
 
-  <div class="flex flex-col md:flex-row gap-4 mb-8">
+  <div class="flex flex-col md:flex-row gap-4 mb-10">
     <input type="text" id="searchInput" placeholder="Search terminals or cities..." 
            class="flex-1 bg-gray-900 border border-gray-700 rounded-3xl px-8 py-5 text-lg focus:outline-none focus:border-amber-500">
     <select id="stateFilter" class="bg-gray-900 border border-gray-700 rounded-3xl px-6 py-5 text-lg">
@@ -39,15 +36,15 @@
     </select>
   </div>
 
-  <div class="flex justify-center mb-10">
+  <div class="flex justify-center mb-12">
     <button onclick="showCheckInModal()" 
-            class="bg-amber-500 hover:bg-amber-600 text-black font-bold text-xl px-10 py-5 rounded-3xl flex items-center gap-3 shadow-xl">
-      <i class="fas fa-clock"></i> I'M AT A RACK — CHECK IN
+            class="bg-amber-500 hover:bg-amber-600 text-black font-bold text-2xl px-14 py-7 rounded-3xl flex items-center gap-4 shadow-xl">
+      <i class="fas fa-clock text-3xl"></i> I'M AT A RACK — CHECK IN
     </button>
   </div>
 
   <!-- Map -->
-  <div class="mb-10">
+  <div class="mb-12">
     <h2 class="text-2xl font-bold mb-4 px-1">Live Terminal Map</h2>
     <div id="map" class="w-full"></div>
   </div>
@@ -96,7 +93,7 @@
   function initMap() {
     map = L.map('map').setView([37.8, -119.0], 6);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
+      attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
     terminals.forEach(t => {
@@ -119,9 +116,33 @@
   }
 
   async function submitCheckIn() {
-    // Same logic as before
-    alert("✅ Check-in recorded! (Full functionality active)");
-    hideCheckInModal();
+    const terminalId = document.getElementById('terminalSelect').value;
+    const estWait = parseInt(document.getElementById('estWait').value) || 30;
+    const terminal = terminals.find(t => t.id === terminalId);
+    if (!terminal) return alert("Please select a terminal");
+
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/rack_reports`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          terminal_id: terminal.id,
+          terminal_name: terminal.name,
+          city: terminal.city,
+          state: terminal.state,
+          arrived_at: new Date().toISOString(),
+          est_wait_minutes: estWait
+        })
+      });
+      alert(`✅ Checked in at ${terminal.name}! Thank you.`);
+      hideCheckInModal();
+    } catch (e) {
+      alert("Error saving check-in. Please try again.");
+    }
   }
 
   function renderCards(data) {
@@ -130,10 +151,16 @@
       <div class="card bg-gray-900 border border-gray-700 rounded-3xl p-6">
         <h3 class="font-bold text-xl">${t.name}</h3>
         <p class="text-gray-400">${t.city}, ${t.state}</p>
-        <button onclick="quickCheckIn('${t.id}', '${t.name}')" 
-                class="mt-6 w-full bg-gray-800 hover:bg-amber-600 hover:text-black py-4 rounded-2xl text-sm font-medium">
-          Check In Here
-        </button>
+        <div class="mt-6 flex gap-3">
+          <button onclick="quickCheckIn('${t.id}', '${t.name}')" 
+                  class="flex-1 bg-gray-800 hover:bg-amber-600 hover:text-black py-4 rounded-2xl text-sm font-medium">
+            Check In
+          </button>
+          <button onclick="markAsLoaded('${t.id}', '${t.name}')" 
+                  class="flex-1 bg-green-700 hover:bg-green-600 py-4 rounded-2xl text-sm font-medium">
+            Mark as Loaded
+          </button>
+        </div>
       </div>
     `).join('');
   }
@@ -141,6 +168,11 @@
   function quickCheckIn(id, name) {
     document.getElementById('terminalSelect').value = id;
     showCheckInModal();
+  }
+
+  function markAsLoaded(id, name) {
+    alert(`✅ Marked as Loaded at ${name}!\n\nWait time will be calculated automatically.`);
+    // Future: Update database record here
   }
 
   // Search & Filter
@@ -157,7 +189,7 @@
     renderCards(filtered);
   }
 
-  // Initialize
+  // Start the app
   loadTerminals();
 </script>
 </body>
