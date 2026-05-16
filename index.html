@@ -37,7 +37,7 @@
   <div class="flex justify-center mb-12">
     <button onclick="showCheckInModal()" 
             class="bg-amber-500 hover:bg-amber-600 text-black font-bold text-2xl px-14 py-7 rounded-3xl flex items-center gap-4 shadow-xl">
-      <i class="fas fa-clock text-3xl"></i> I'M AT A RACK — CHECK IN
+      <i class="fas fa-clock text-3xl"></i> CHECK IN AT A RACK
     </button>
   </div>
 
@@ -52,7 +52,8 @@
 <!-- Check-In Modal -->
 <div id="checkInModal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50">
   <div class="bg-gray-900 rounded-3xl p-8 max-w-md w-full mx-4">
-    <h2 class="text-2xl font-bold mb-6">Check In at Terminal</h2>
+    <h2 class="text-2xl font-bold mb-6" id="modalTitle">Check In at Terminal</h2>
+    
     <select id="terminalSelect" class="w-full bg-gray-800 border border-gray-700 rounded-2xl px-6 py-4 mb-6 text-lg"></select>
     
     <div class="mb-6">
@@ -99,10 +100,12 @@
     });
   }
 
-  function showCheckInModal() {
+  function showCheckInModal(preselectedId = null) {
     const select = document.getElementById('terminalSelect');
     select.innerHTML = `<option value="">Select Terminal...</option>` + 
-      terminals.map(t => `<option value="${t.id}">${t.name} (${t.city}, ${t.state})</option>`).join('');
+      terminals.map(t => `<option value="${t.id}" ${preselectedId === t.id ? 'selected' : ''}>${t.name} (${t.city}, ${t.state})</option>`).join('');
+    
+    document.getElementById('modalTitle').textContent = preselectedId ? "Quick Check-In" : "Check In at Terminal";
     document.getElementById('checkInModal').classList.remove('hidden');
   }
 
@@ -134,14 +137,16 @@
         })
       });
 
-      // Success feedback + close modal
-      alert(`✅ Thank you!\nCheck-in recorded at ${terminal.name}.`);
+      alert(`✅ Check-in recorded at ${terminal.name}! Thank you for helping other drivers.`);
       hideCheckInModal();
-      
     } catch (e) {
-      alert("❌ Failed to save. Please try again.");
-      console.error(e);
+      alert("Error saving check-in. Please try again.");
     }
+  }
+
+  function quickCheckIn(id, name) {
+    document.getElementById('terminalSelect').value = id;   // Pre-select
+    showCheckInModal(id);   // Pass ID to pre-select and change title
   }
 
   function renderCards(data) {
@@ -156,11 +161,6 @@
         </button>
       </div>
     `).join('');
-  }
-
-  function quickCheckIn(id, name) {
-    document.getElementById('terminalSelect').value = id;
-    showCheckInModal();
   }
 
   // Search & Filter
