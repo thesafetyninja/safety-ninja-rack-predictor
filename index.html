@@ -19,9 +19,14 @@
 <body class="bg-gray-950 text-white min-h-screen">
 
 <div class="max-w-7xl mx-auto px-4 py-10">
-  <div class="text-center mb-12">
-    <h1 class="text-5xl font-bold text-amber-400 mb-3">Rack Wait Predictor</h1>
-    <p class="text-xl text-gray-400">Nationwide • Crowdsourced • Real-time</p>
+  <div class="flex justify-between items-center mb-8">
+    <div>
+      <h1 class="text-5xl font-bold text-amber-400">Rack Wait Predictor</h1>
+      <p class="text-gray-400">Nationwide • Crowdsourced • Real-time</p>
+    </div>
+    <button onclick="showAdminLogin()" class="text-xs text-gray-500 hover:text-amber-400">
+      👨‍💼 Admin
+    </button>
   </div>
 
   <div class="flex flex-col md:flex-row gap-4 mb-10">
@@ -75,7 +80,6 @@
 <div id="suggestModal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50">
   <div class="bg-gray-900 rounded-3xl p-8 max-w-md w-full mx-4">
     <h2 class="text-2xl font-bold mb-6">Suggest New Terminal</h2>
-    
     <input id="suggestName" type="text" placeholder="Terminal Name" class="w-full bg-gray-800 border border-gray-700 rounded-2xl px-6 py-4 mb-4">
     <input id="suggestAddress" type="text" placeholder="Address (optional)" class="w-full bg-gray-800 border border-gray-700 rounded-2xl px-6 py-4 mb-4">
     <input id="suggestCity" type="text" placeholder="City" class="w-full bg-gray-800 border border-gray-700 rounded-2xl px-6 py-4 mb-4">
@@ -88,9 +92,24 @@
   </div>
 </div>
 
+<!-- Admin Login Modal -->
+<div id="adminLoginModal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+  <div class="bg-gray-900 rounded-3xl p-8 max-w-sm w-full mx-4">
+    <h2 class="text-2xl font-bold mb-6">Admin Access</h2>
+    <input type="password" id="adminPassword" placeholder="Enter password" 
+           class="w-full bg-gray-800 border border-gray-700 rounded-2xl px-6 py-4 mb-6 text-lg">
+    <button onclick="checkAdminPassword()" 
+            class="w-full bg-amber-500 hover:bg-amber-600 text-black py-4 rounded-2xl font-bold">
+      Login
+    </button>
+    <button onclick="hideAdminLogin()" class="w-full text-gray-400 py-3 mt-2">Cancel</button>
+  </div>
+</div>
+
 <script>
   const SUPABASE_URL = 'https://ciljonavusljhvkrdyxo.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_E0HIlMVQuYRB1ZBHP4t3NA_5xyFI6AK';
+  const ADMIN_PASSWORD = "safety123";   // Change this later
 
   let terminals = [];
   let map;
@@ -121,7 +140,10 @@
   }
 
   function showCheckInModal() {
-    // ... (existing check-in modal code)
+    const select = document.getElementById('terminalSelect');
+    select.innerHTML = `<option value="">Select Terminal...</option>` + 
+      terminals.map(t => `<option value="${t.id}">${t.name} (${t.city}, ${t.state})</option>`).join('');
+    document.getElementById('checkInModal').classList.remove('hidden');
   }
 
   function hideCheckInModal() {
@@ -129,12 +151,35 @@
   }
 
   async function submitCheckIn() {
-    // ... (existing check-in logic)
-    alert("✅ Check-in recorded! Thank you.");
-    hideCheckInModal();
+    const terminalId = document.getElementById('terminalSelect').value;
+    const estWait = parseInt(document.getElementById('estWait').value) || 25;
+    const terminal = terminals.find(t => t.id === terminalId);
+    if (!terminal) return alert("Please select a terminal");
+
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/rack_reports`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          terminal_id: terminal.id,
+          terminal_name: terminal.name,
+          city: terminal.city,
+          state: terminal.state,
+          arrived_at: new Date().toISOString(),
+          est_wait_minutes: estWait
+        })
+      });
+      alert(`✅ Check-in recorded at ${terminal.name}! Thank you.`);
+      hideCheckInModal();
+    } catch (e) {
+      alert("Error saving check-in.");
+    }
   }
 
-  // === NEW: Suggest New Terminal ===
   function showSuggestModal() {
     document.getElementById('suggestModal').classList.remove('hidden');
   }
@@ -171,16 +216,32 @@
         })
       });
 
-      alert("✅ Thank you! Your terminal suggestion has been submitted for review.");
+      alert("✅ Thank you! Your suggestion has been submitted for review.");
       hideSuggestModal();
-      
-      // Clear form
       document.getElementById('suggestName').value = '';
       document.getElementById('suggestAddress').value = '';
       document.getElementById('suggestCity').value = '';
       document.getElementById('suggestState').value = '';
     } catch (e) {
-      alert("Error submitting suggestion. Please try again.");
+      alert("Error submitting suggestion.");
+    }
+  }
+
+  function showAdminLogin() {
+    document.getElementById('adminLoginModal').classList.remove('hidden');
+  }
+
+  function hideAdminLogin() {
+    document.getElementById('adminLoginModal').classList.add('hidden');
+  }
+
+  function checkAdminPassword() {
+    const password = document.getElementById('adminPassword').value;
+    if (password === "safety123") {
+      alert("✅ Admin access granted!\n\nFull Admin Dashboard coming soon.");
+      hideAdminLogin();
+    } else {
+      alert("❌ Incorrect password");
     }
   }
 
@@ -203,7 +264,7 @@
     showCheckInModal();
   }
 
-  // Search & Filter (simplified)
+  // Search & Filter
   document.getElementById('searchInput').addEventListener('input', filterResults);
   document.getElementById('stateFilter').addEventListener('change', filterResults);
 
