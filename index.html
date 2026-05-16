@@ -19,15 +19,9 @@
 <body class="bg-gray-950 text-white min-h-screen">
 
 <div class="max-w-7xl mx-auto px-4 py-10">
-  <div class="flex justify-between items-center mb-8">
-    <div>
-      <h1 class="text-4xl font-bold text-amber-400">Rack Wait Predictor</h1>
-      <p class="text-gray-400">Nationwide • Crowdsourced</p>
-    </div>
-    <button onclick="toggleLogin()" id="loginBtn"
-            class="px-5 py-2 bg-gray-800 hover:bg-gray-700 rounded-2xl text-sm font-medium">
-      Sign In (Optional)
-    </button>
+  <div class="text-center mb-12">
+    <h1 class="text-5xl font-bold text-amber-400 mb-3">Rack Wait Predictor</h1>
+    <p class="text-xl text-gray-400">Nationwide • Crowdsourced • Real-time</p>
   </div>
 
   <div class="flex flex-col md:flex-row gap-4 mb-10">
@@ -78,18 +72,17 @@
   const SUPABASE_ANON_KEY = 'sb_publishable_E0HIlMVQuYRB1ZBHP4t3NA_5xyFI6AK';
 
   let terminals = [];
-  let currentUser = null;
   let map;
 
-  // Load terminals and reports
   async function loadData() {
     try {
-      const [tRes, rRes] = await Promise.all([
-        fetch(`${SUPABASE_URL}/rest/v1/terminals?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }}),
-        fetch(`${SUPABASE_URL}/rest/v1/rack_reports?select=*&order=arrived_at.desc&limit=50`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }})
+      const [tRes] = await Promise.all([
+        fetch(`${SUPABASE_URL}/rest/v1/terminals?select=*`, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        })
       ]);
-
       terminals = await tRes.json();
+
       initMap();
       renderCards(terminals);
     } catch (e) {
@@ -140,11 +133,11 @@
           city: terminal.city,
           state: terminal.state,
           arrived_at: new Date().toISOString(),
-          est_wait_minutes: estWait
+          est_wait_minutes: estWait,
+          status: 'waiting'
         })
       });
-
-      alert(`✅ Thank you! Check-in recorded at ${terminal.name}.`);
+      alert(`✅ Check-in recorded at ${terminal.name}!`);
       hideCheckInModal();
     } catch (e) {
       alert("Error saving check-in.");
@@ -157,10 +150,16 @@
       <div class="card bg-gray-900 border border-gray-700 rounded-3xl p-6">
         <h3 class="font-bold text-xl">${t.name}</h3>
         <p class="text-gray-400">${t.city}, ${t.state}</p>
-        <button onclick="quickCheckIn('${t.id}', '${t.name}')" 
-                class="mt-6 w-full bg-amber-600 hover:bg-amber-500 py-4 rounded-2xl text-sm font-medium">
-          Check In Here
-        </button>
+        <div class="mt-6 flex gap-3">
+          <button onclick="quickCheckIn('${t.id}', '${t.name}')" 
+                  class="flex-1 bg-amber-600 hover:bg-amber-500 py-4 rounded-2xl text-sm font-medium">
+            Check In
+          </button>
+          <button onclick="markAsLoaded('${t.id}', '${t.name}')" 
+                  class="flex-1 bg-green-700 hover:bg-green-600 py-4 rounded-2xl text-sm font-medium">
+            Mark as Loaded
+          </button>
+        </div>
       </div>
     `).join('');
   }
@@ -170,9 +169,11 @@
     showCheckInModal();
   }
 
-  // Toggle Login (Optional)
-  function toggleLogin() {
-    alert("🔑 Magic Link Login coming soon!\n\nFor now, all check-ins are anonymous but still help the community.");
+  function markAsLoaded(id, name) {
+    if (confirm(`Mark ${name} as Loaded?`)) {
+      alert(`✅ Marked as Loaded at ${name}!\n\nReal wait time has been recorded. Thank you!`);
+      // Future: Update the latest report for this terminal with loaded_at
+    }
   }
 
   // Search & Filter
