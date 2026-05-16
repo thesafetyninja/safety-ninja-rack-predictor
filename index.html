@@ -12,7 +12,7 @@
     body { font-family: system-ui, sans-serif; }
     .card { transition: all 0.3s ease; }
     .card:hover { transform: translateY(-8px); }
-    #map { height: 500px; border-radius: 16px; }
+    #map { height: 480px; border-radius: 16px; }
   </style>
 </head>
 <body class="bg-gray-950 text-white min-h-screen">
@@ -20,7 +20,7 @@
 <div class="max-w-7xl mx-auto px-4 py-10">
   <div class="text-center mb-12">
     <h1 class="text-5xl font-bold text-amber-400 mb-3">Rack Wait Predictor</h1>
-    <p class="text-xl text-gray-400">Nationwide • Crowdsourced • Real-time for Fuel Tanker Drivers</p>
+    <p class="text-xl text-gray-400">Nationwide Crowdsourced Fuel Terminal Wait Times</p>
   </div>
 
   <div class="flex flex-col md:flex-row gap-4 mb-10">
@@ -44,7 +44,7 @@
 
   <!-- Map -->
   <div class="mb-12">
-    <h2 class="text-2xl font-bold mb-4">Terminal Map</h2>
+    <h2 class="text-2xl font-bold mb-4">Live Terminal Map</h2>
     <div id="map" class="w-full"></div>
   </div>
 
@@ -73,28 +73,126 @@
   const SUPABASE_URL = 'https://ciljonavusljhvkrdyxo.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_E0HIlMVQuYRB1ZBHP4t3NA_5xyFI6AK';
 
-  // Large seeded terminal list (85+ major locations)
-  let terminals = [
-    {id:"benicia-valero", name:"Valero Benicia", city:"Benicia", state:"CA", lat:38.049, lng:-122.158},
-    {id:"martinez-shell", name:"Shell Martinez", city:"Martinez", state:"CA", lat:38.019, lng:-122.134},
-    {id:"richmond-chevron", name:"Chevron Richmond", city:"Richmond", state:"CA", lat:37.96, lng:-122.38},
-    {id:"carson-marathon", name:"Marathon Carson", city:"Carson", state:"CA", lat:33.83, lng:-118.25},
-    {id:"stockton-valero", name:"Valero Stockton", city:"Stockton", state:"CA", lat:37.96, lng:-121.29},
-    {id:"bakersfield", name:"Kern Oil Bakersfield", city:"Bakersfield", state:"CA", lat:35.37, lng:-119.02},
-    {id:"wilmington", name:"Wilmington Refinery Terminal", city:"Wilmington", state:"CA", lat:33.78, lng:-118.26},
-    {id:"long-beach", name:"Long Beach Terminal", city:"Long Beach", state:"CA", lat:33.77, lng:-118.21},
-    {id:"houston-motiva", name:"Motiva Houston", city:"Houston", state:"TX", lat:29.76, lng:-95.37},
-    {id:"houston-exxon", name:"ExxonMobil Houston", city:"Houston", state:"TX", lat:29.73, lng:-95.26},
-    {id:"beaumont", name:"Beaumont Terminal", city:"Beaumont", state:"TX", lat:30.08, lng:-94.1},
-    {id:"corpus-christi", name:"Corpus Christi Refinery", city:"Corpus Christi", state:"TX", lat:27.8, lng:-97.4},
-    // ... (I can add 70+ more if needed — this is already a strong national start)
-  ];
-
+  let terminals = [];
   let map;
+  let markers = [];
 
-  // ... (rest of the robust script will be in the next message if you want it split, but this is the core)
+  async function loadTerminals() {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/terminals?select=*`, {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      terminals = await res.json();
+      initMap();
+      loadReports();
+    } catch (e) {
+      console.error("Failed to load terminals", e);
+    }
+  }
 
-  console.log("Rack Predictor v2 loaded with", terminals.length, "terminals");
+  function initMap() {
+    map = L.map('map').setView([37.8, -122.0], 6); // Center on California
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    terminals.forEach(t => {
+      if (t.lat && t.lng) {
+        const marker = L.marker([t.lat, t.lng]).addTo(map)
+          .bindPopup(`<b>${t.name}</b><br>${t.city}, ${t.state}`);
+        markers.push(marker);
+      }
+    });
+  }
+
+  async function submitCheckIn() {
+    // ... (same as before)
+    const terminalId = document.getElementById('terminalSelect').value;
+    const estWait = parseInt(document.getElementById('estWait').value) || 30;
+    const terminal = terminals.find(t => t.id === terminalId);
+    if (!terminal) return;
+
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/rack_reports`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          terminal_id: terminal.id,
+          terminal_name: terminal.name,
+          city: terminal.city,
+          state: terminal.state,
+          arrived_at: new Date().toISOString(),
+          est_wait_minutes: estWait
+        })
+      });
+      alert(`✅ Checked in at ${terminal.name}`);
+      hideCheckInModal();
+      loadReports();
+    } catch (e) {
+      alert("Error saving check-in");
+    }
+  }
+
+  function showCheckInModal() {
+    const select = document.getElementById('terminalSelect');
+    select.innerHTML = `<option value="">Select Terminal...</option>` + 
+      terminals.map(t => `<option value="${t.id}">${t.name} (${t.city}, ${t.state})</option>`).join('');
+    document.getElementById('checkInModal').classList.remove('hidden');
+  }
+
+  function hideCheckInModal() {
+    document.getElementById('checkInModal').classList.add('hidden');
+  }
+
+  async function loadReports() {
+    const container = document.getElementById('results');
+    container.innerHTML = `<p class="col-span-full text-center py-20 text-gray-400">Loading...</p>`;
+
+    renderCards(terminals); // Expand later with real reports
+  }
+
+  function renderCards(data) {
+    const container = document.getElementById('results');
+    container.innerHTML = data.map(t => `
+      <div class="card bg-gray-900 border border-gray-700 rounded-3xl p-6">
+        <h3 class="font-bold text-xl">${t.name}</h3>
+        <p class="text-gray-400">${t.city}, ${t.state}</p>
+        <button onclick="quickCheckIn('${t.id}', '${t.name}')" 
+                class="mt-6 w-full bg-gray-800 hover:bg-amber-600 hover:text-black py-4 rounded-2xl text-sm font-medium">
+          Check In Here
+        </button>
+      </div>
+    `).join('');
+  }
+
+  function quickCheckIn(id, name) {
+    document.getElementById('terminalSelect').value = id;
+    showCheckInModal();
+  }
+
+  // Search & Filter
+  document.getElementById('searchInput').addEventListener('input', filterResults);
+  document.getElementById('stateFilter').addEventListener('change', filterResults);
+
+  function filterResults() {
+    const term = document.getElementById('searchInput').value.toLowerCase();
+    const state = document.getElementById('stateFilter').value;
+    const filtered = terminals.filter(t => 
+      (!term || t.name.toLowerCase().includes(term) || t.city.toLowerCase().includes(term)) &&
+      (!state || t.state === state)
+    );
+    renderCards(filtered);
+  }
+
+  // Initialize
+  loadTerminals();
 </script>
 </body>
 </html>
