@@ -9,7 +9,7 @@
   <style>
     body { font-family: system-ui, sans-serif; }
     .card { transition: all 0.3s; }
-    .card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3); }
+    .card:hover { transform: translateY(-6px); }
   </style>
 </head>
 <body class="bg-gray-950 text-white min-h-screen">
@@ -17,17 +17,26 @@
 <div class="max-w-5xl mx-auto px-4 py-10">
   <div class="text-center mb-10">
     <h1 class="text-5xl font-bold text-amber-400 mb-3">Rack Wait Predictor</h1>
-    <p class="text-xl text-gray-400">Real-time fuel terminal wait times • Made for Tanker Drivers</p>
+    <p class="text-xl text-gray-400">Real-time fuel terminal wait times • Built by & for Tanker Drivers</p>
   </div>
 
-  <div class="mb-8">
+  <!-- Search -->
+  <div class="mb-10">
     <input type="text" id="searchInput" 
-           placeholder="Search by terminal name or city (e.g. Benicia, Valero, Carson...)" 
+           placeholder="Search terminals (Benicia, Valero, Carson, Martinez...)" 
            class="w-full bg-gray-900 border border-gray-700 rounded-3xl px-8 py-5 text-lg focus:outline-none focus:border-amber-500">
   </div>
 
-  <div id="results" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-    <!-- Dynamic cards will appear here -->
+  <!-- Check-In Button -->
+  <div class="flex justify-center mb-10">
+    <button onclick="showCheckInForm()" 
+            class="bg-amber-500 hover:bg-amber-600 text-black font-bold text-xl px-10 py-4 rounded-3xl flex items-center gap-3">
+      <i class="fas fa-clock"></i> I'M AT A RACK - CHECK IN
+    </button>
+  </div>
+
+  <div id="results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <!-- Cards will load here -->
   </div>
 </div>
 
@@ -35,40 +44,54 @@
   const SUPABASE_URL = 'https://ciljonavusljhvkrdyxo.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_E0HIlMVQuYRB1ZBHP4t3NA_5xyFI6AK';
 
-  async function loadRecentReports() {
+  async function loadReports() {
     try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/rack_reports?select=*&order=arrived_at.desc&limit=20`, {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rack_reports?select=*&order=arrived_at.desc&limit=30`, {
         headers: {
           'apikey': SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
         }
       });
       const data = await res.json();
-      renderResults(data);
-    } catch (err) {
-      console.error(err);
-      document.getElementById('results').innerHTML = `<p class="text-red-400 text-center">Unable to load data. Please try again later.</p>`;
+      renderCards(data);
+    } catch (e) {
+      console.error(e);
     }
   }
 
-  function renderResults(reports) {
+  function renderCards(reports) {
     const container = document.getElementById('results');
-    container.innerHTML = reports.length === 0 
-      ? `<p class="text-gray-400 text-center py-10">No recent reports yet. Be the first to check in!</p>`
-      : reports.map(r => `
-        <div class="card bg-gray-900 border border-gray-700 rounded-3xl p-6">
-          <h3 class="font-bold text-lg">${r.terminal_name}</h3>
-          <p class="text-gray-400 text-sm">${r.city}, ${r.state}</p>
-          <div class="mt-4 flex items-center gap-3">
-            <span class="text-3xl font-mono text-amber-400">${r.wait_minutes || '?'}</span>
-            <span class="text-gray-400">min average wait</span>
+    if (reports.length === 0) {
+      container.innerHTML = `<p class="col-span-full text-center text-gray-400 py-20">No recent reports yet.<br>Be the first driver to check in!</p>`;
+      return;
+    }
+
+    container.innerHTML = reports.map(r => `
+      <div class="card bg-gray-900 border border-gray-700 rounded-3xl p-6">
+        <h3 class="font-bold text-xl">${r.terminal_name}</h3>
+        <p class="text-gray-400">${r.city}, ${r.state}</p>
+        <div class="mt-6 flex justify-between items-end">
+          <div>
+            <span class="text-4xl font-mono text-amber-400">${r.wait_minutes || '—'}</span>
+            <span class="text-sm text-gray-400 block">min wait</span>
           </div>
+          <button onclick="alert('Check-in feature coming soon!')" 
+                  class="bg-gray-800 hover:bg-gray-700 px-5 py-2 rounded-2xl text-sm">
+            Check In
+          </button>
         </div>
-      `).join('');
+      </div>
+    `).join('');
   }
 
-  // Load data when page opens
-  loadRecentReports();
+  // Search functionality
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+    // Simple client-side search (we'll improve later)
+    console.log("Searching for:", e.target.value);
+  });
+
+  // Initial load
+  loadReports();
 </script>
 
 </body>
