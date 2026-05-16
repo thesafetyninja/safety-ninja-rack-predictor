@@ -8,22 +8,26 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <style>
     body { font-family: system-ui, sans-serif; }
+    .card { transition: all 0.3s; }
+    .card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3); }
   </style>
 </head>
 <body class="bg-gray-950 text-white min-h-screen">
 
-<div class="max-w-4xl mx-auto px-4 py-8">
-  <h1 class="text-4xl font-bold text-center mb-2 text-amber-400">Rack Wait Predictor</h1>
-  <p class="text-center text-gray-400 mb-10">Real-time fuel terminal wait times • Built for Tanker Drivers</p>
+<div class="max-w-5xl mx-auto px-4 py-10">
+  <div class="text-center mb-10">
+    <h1 class="text-5xl font-bold text-amber-400 mb-3">Rack Wait Predictor</h1>
+    <p class="text-xl text-gray-400">Real-time fuel terminal wait times • Made for Tanker Drivers</p>
+  </div>
 
   <div class="mb-8">
     <input type="text" id="searchInput" 
-           placeholder="Search terminals (Benicia, Valero, Carson, etc...)" 
-           class="w-full bg-gray-900 border border-gray-700 rounded-2xl px-6 py-4 text-lg focus:outline-none focus:border-amber-500">
+           placeholder="Search by terminal name or city (e.g. Benicia, Valero, Carson...)" 
+           class="w-full bg-gray-900 border border-gray-700 rounded-3xl px-8 py-5 text-lg focus:outline-none focus:border-amber-500">
   </div>
 
-  <div id="results" class="space-y-4">
-    <!-- Results will appear here -->
+  <div id="results" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Dynamic cards will appear here -->
   </div>
 </div>
 
@@ -33,20 +37,37 @@
 
   async function loadRecentReports() {
     try {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/rack_reports?select=*&order=arrived_at.desc&limit=10`, {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rack_reports?select=*&order=arrived_at.desc&limit=20`, {
         headers: {
           'apikey': SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
         }
       });
-      const data = await response.json();
-      console.log("Recent reports:", data);
-      // We'll build nice cards next
-    } catch (e) {
-      console.error(e);
+      const data = await res.json();
+      renderResults(data);
+    } catch (err) {
+      console.error(err);
+      document.getElementById('results').innerHTML = `<p class="text-red-400 text-center">Unable to load data. Please try again later.</p>`;
     }
   }
 
+  function renderResults(reports) {
+    const container = document.getElementById('results');
+    container.innerHTML = reports.length === 0 
+      ? `<p class="text-gray-400 text-center py-10">No recent reports yet. Be the first to check in!</p>`
+      : reports.map(r => `
+        <div class="card bg-gray-900 border border-gray-700 rounded-3xl p-6">
+          <h3 class="font-bold text-lg">${r.terminal_name}</h3>
+          <p class="text-gray-400 text-sm">${r.city}, ${r.state}</p>
+          <div class="mt-4 flex items-center gap-3">
+            <span class="text-3xl font-mono text-amber-400">${r.wait_minutes || '?'}</span>
+            <span class="text-gray-400">min average wait</span>
+          </div>
+        </div>
+      `).join('');
+  }
+
+  // Load data when page opens
   loadRecentReports();
 </script>
 
