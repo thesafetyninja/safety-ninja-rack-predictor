@@ -19,9 +19,15 @@
 <body class="bg-gray-950 text-white min-h-screen">
 
 <div class="max-w-7xl mx-auto px-4 py-10">
-  <div class="text-center mb-12">
-    <h1 class="text-5xl font-bold text-amber-400 mb-3">Rack Wait Predictor</h1>
-    <p class="text-xl text-gray-400">Nationwide • Crowdsourced • Real-time</p>
+  <div class="flex justify-between items-center mb-8">
+    <div>
+      <h1 class="text-4xl font-bold text-amber-400">Rack Wait Predictor</h1>
+      <p class="text-gray-400">Nationwide • Crowdsourced</p>
+    </div>
+    <button onclick="toggleLogin()" id="loginBtn"
+            class="px-5 py-2 bg-gray-800 hover:bg-gray-700 rounded-2xl text-sm font-medium">
+      Sign In (Optional)
+    </button>
   </div>
 
   <div class="flex flex-col md:flex-row gap-4 mb-10">
@@ -41,16 +47,9 @@
     </button>
   </div>
 
-  <!-- Map -->
   <div class="mb-12">
     <h2 class="text-2xl font-bold mb-4">Live Terminal Map</h2>
     <div id="map" class="w-full"></div>
-  </div>
-
-  <!-- Leaderboard -->
-  <div class="mb-12 bg-gray-900 rounded-3xl p-6">
-    <h2 class="text-xl font-bold mb-4 flex items-center gap-2"><i class="fas fa-trophy text-amber-400"></i> Top Contributors This Week</h2>
-    <div id="leaderboard" class="text-sm text-gray-400">Loading contributors...</div>
   </div>
 
   <div id="results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
@@ -79,26 +78,27 @@
   const SUPABASE_ANON_KEY = 'sb_publishable_E0HIlMVQuYRB1ZBHP4t3NA_5xyFI6AK';
 
   let terminals = [];
+  let currentUser = null;
   let map;
 
+  // Load terminals and reports
   async function loadData() {
     try {
-      // Load Terminals
-      const tRes = await fetch(`${SUPABASE_URL}/rest/v1/terminals?select=*`, {
-        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-      });
-      terminals = await tRes.json();
+      const [tRes, rRes] = await Promise.all([
+        fetch(`${SUPABASE_URL}/rest/v1/terminals?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }}),
+        fetch(`${SUPABASE_URL}/rest/v1/rack_reports?select=*&order=arrived_at.desc&limit=50`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }})
+      ]);
 
+      terminals = await tRes.json();
       initMap();
       renderCards(terminals);
-      loadLeaderboard();
     } catch (e) {
       console.error(e);
     }
   }
 
   function initMap() {
-    map = L.map('map').setView([36.8, -119.5], 7); // Focused on California
+    map = L.map('map').setView([36.8, -119.5], 7);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
     terminals.forEach(t => {
@@ -107,26 +107,6 @@
           .bindPopup(`<b>${t.name}</b><br>${t.city}, ${t.state}`);
       }
     });
-  }
-
-  function renderCards(data) {
-    const container = document.getElementById('results');
-    container.innerHTML = data.map(t => `
-      <div class="card bg-gray-900 border border-gray-700 rounded-3xl p-6">
-        <h3 class="font-bold text-xl">${t.name}</h3>
-        <p class="text-gray-400">${t.city}, ${t.state}</p>
-        <div class="mt-6 flex gap-3">
-          <button onclick="quickCheckIn('${t.id}', '${t.name}')" 
-                  class="flex-1 bg-amber-600 hover:bg-amber-500 py-4 rounded-2xl text-sm font-medium">
-            Check In
-          </button>
-          <button onclick="markAsLoaded('${t.id}', '${t.name}')" 
-                  class="flex-1 bg-green-700 hover:bg-green-600 py-4 rounded-2xl text-sm font-medium">
-            Mark as Loaded
-          </button>
-        </div>
-      </div>
-    `).join('');
   }
 
   function showCheckInModal() {
@@ -141,9 +121,48 @@
   }
 
   async function submitCheckIn() {
-    // ... (check-in logic)
-    alert("✅ Check-in recorded! Thank you for contributing.");
-    hideCheckInModal();
+    const terminalId = document.getElementById('terminalSelect').value;
+    const estWait = parseInt(document.getElementById('estWait').value) || 25;
+    const terminal = terminals.find(t => t.id === terminalId);
+    if (!terminal) return;
+
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/rack_reports`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          terminal_id: terminal.id,
+          terminal_name: terminal.name,
+          city: terminal.city,
+          state: terminal.state,
+          arrived_at: new Date().toISOString(),
+          est_wait_minutes: estWait
+        })
+      });
+
+      alert(`✅ Thank you! Check-in recorded at ${terminal.name}.`);
+      hideCheckInModal();
+    } catch (e) {
+      alert("Error saving check-in.");
+    }
+  }
+
+  function renderCards(data) {
+    const container = document.getElementById('results');
+    container.innerHTML = data.map(t => `
+      <div class="card bg-gray-900 border border-gray-700 rounded-3xl p-6">
+        <h3 class="font-bold text-xl">${t.name}</h3>
+        <p class="text-gray-400">${t.city}, ${t.state}</p>
+        <button onclick="quickCheckIn('${t.id}', '${t.name}')" 
+                class="mt-6 w-full bg-amber-600 hover:bg-amber-500 py-4 rounded-2xl text-sm font-medium">
+          Check In Here
+        </button>
+      </div>
+    `).join('');
   }
 
   function quickCheckIn(id, name) {
@@ -151,16 +170,9 @@
     showCheckInModal();
   }
 
-  function markAsLoaded(id, name) {
-    alert(`✅ Marked as Loaded at ${name}!\n\nThis will help calculate real average wait times.`);
-  }
-
-  function loadLeaderboard() {
-    document.getElementById('leaderboard').innerHTML = `
-      <div class="flex justify-between text-sm">
-        <div>Top Driver: Anonymous Hero (12 check-ins)</div>
-        <div class="text-amber-400">Thank you for helping the community!</div>
-      </div>`;
+  // Toggle Login (Optional)
+  function toggleLogin() {
+    alert("🔑 Magic Link Login coming soon!\n\nFor now, all check-ins are anonymous but still help the community.");
   }
 
   // Search & Filter
